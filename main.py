@@ -9,20 +9,22 @@ from telegram.ext import (
 import sqlite3
 
 # ===== EDIT THESE =====
-TOKEN = "8529982079:AAGx_cdHsdNw8vyEWS6AQJ-tVAKtBOGTYaM"
-ADMIN_IDS = [8573670035]
+TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"
 BOT_USERNAME = "FynixTokenBot_bot"  # without @
 
 COIN_NAME = "Fynix Token"
 JOIN_BONUS = 100
 REFER_BONUS = 500
-MIN_WITHDRAW = 10000  # ইচ্ছা করলে বদলাও
+MIN_WITHDRAW = 3000
 
 REQUIRED_CHANNELS = [
-    "@FynixTokenBot",
-    "@FynixTokenBot_News",
+    "@YourChannel1",
+    "@YourChannel2",
 ]
 # ======================
+
+# ✅ Admin ID (YOUR ID)
+ADMIN_IDS = [8573670035]
 
 # ---------- DB ----------
 conn = sqlite3.connect("fynix.db", check_same_thread=False)
@@ -47,6 +49,9 @@ MAIN_MENU = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+
 def join_keyboard():
     rows = []
     for ch in REQUIRED_CHANNELS:
@@ -58,7 +63,7 @@ def referral_link(user_id: int) -> str:
     return f"https://t.me/{BOT_USERNAME}?start={user_id}"
 
 async def is_joined_all(app, user_id: int) -> bool:
-    # Verify join works only if bot is ADMIN in those channels
+    # Works only if bot is ADMIN in the required channels
     for ch in REQUIRED_CHANNELS:
         try:
             m = await app.bot.get_chat_member(chat_id=ch, user_id=user_id)
@@ -79,7 +84,6 @@ def add_bonus(user_id: int, amount: int):
     conn.commit()
 
 def add_referral(referrer_id: int):
-    # increase ref count and bonus
     cur.execute("SELECT user_id FROM users WHERE user_id=?", (referrer_id,))
     if cur.fetchone():
         cur.execute("UPDATE users SET referrals = referrals + 1 WHERE user_id=?", (referrer_id,))
@@ -91,12 +95,11 @@ def get_user(user_id: int):
     cur.execute("SELECT referrals, balance, wallet FROM users WHERE user_id=?", (user_id,))
     return cur.fetchone()  # (refs, bal, wallet)
 
-# ---------- Handlers ----------
+# ---------- Bot Handlers ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ensure_user(user_id)
 
-    # referral param
     ref_by = None
     if context.args:
         try:
@@ -104,7 +107,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             ref_by = None
 
-    # Gate first
     joined = await is_joined_all(context.application, user_id)
     if not joined:
         await update.message.reply_text(
@@ -115,25 +117,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # First-time join bonus (only once)
-    # We'll store bonus by checking if balance is 0 and referrals 0 and wallet empty (simple)
+    # First-time bonus check
     refs, bal, wallet = get_user(user_id)
     if bal == 0 and refs == 0 and wallet == "":
         add_bonus(user_id, JOIN_BONUS)
-        # give referral reward if ref_by exists and not self
         if ref_by and ref_by != user_id:
             ensure_user(ref_by)
             add_referral(ref_by)
 
     await update.message.reply_text(
         f"🎉 Welcome to {COIN_NAME} Airdrop!\n"
-        f"✅ Joining Bonus: {JOIN_BONUS} {COIN_NAME}\n"
-        f"🎁 Per Refer: {REFER_BONUS} {COIN_NAME}\n\n"
+        f"✅ Join bonus: {JOIN_BONUS} {COIN_NAME}\n"
+        f"🎁 Refer bonus: {REFER_BONUS} {COIN_NAME}\n\n"
         "Use the menu below 👇",
         reply_markup=MAIN_MENU
     )
-
-async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     user_id = q.from_user.id
@@ -142,7 +141,7 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not joined:
         await q.edit_message_text(
             "❌ You still haven’t joined all required channels.\n"
-            "Join them and tap 🔍 Continue / Verify Join again.",
+            "Join them and tap Verify again.",
             reply_markup=join_keyboard()
         )
         return
@@ -154,7 +153,6 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=MAIN_MENU
     )
 
-# Wallet input state (simple in-memory)
 WAITING_WALLET = set()
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -174,10 +172,9 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     refs, bal, wallet = get_user(user_id)
 
     if user_id in WAITING_WALLET:
-        # user is sending wallet address
         addr = text
         if len(addr) < 10:
-            await update.message.reply_text("❌ Wallet address seems too short. Try again or send /start")
+            await update.message.reply_text("❌ Wallet address too short. Try again.")
             return
         cur.execute("UPDATE users SET wallet=? WHERE user_id=?", (addr, user_id))
         conn.commit()
@@ -188,17 +185,17 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "💰 Balance":
         await update.message.reply_text(
             f"👤 ID: {user_id}\n"
-            f"💎 Available: {bal} {COIN_NAME}\n"
-            f"👥 Total Invites: {refs}"
+            f"💎 Balance: {bal} {COIN_NAME}\n"
+            f"👥 Referrals: {refs}"
         )
 
     elif text == "🤝 Invite":
         link = referral_link(user_id)
         await update.message.reply_text(
-            f"🤝 Affiliate Program\n\n"
-            f"🎁 Reward per Invite: {REFER_BONUS} {COIN_NAME}\n"
-            f"👥 Total Invites: {refs}\n\n"
-            f"🔗 Your Link:\n{link}"
+            f"🤝 Referral Program\n\n"
+            f"🎁 Reward per referral: {REFER_BONUS} {COIN_NAME}\n"
+            f"👥 Total referrals: {refs}\n\n"
+            f"🔗 Your link:\n{link}"
         )
 
     elif text == "👛 Wallet":
@@ -207,23 +204,21 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Change Wallet Address", callback_data="change_wallet")]
         ])
         await update.message.reply_text(
-            f"👛 Your wallet address:\n{show}\n\n"
-            "Use button below to change 👇",
+            f"👛 Your wallet:\n{show}\n\n"
+            "Press button to change 👇",
             reply_markup=kb
         )
 
     elif text == "💸 Withdraw":
         if bal < MIN_WITHDRAW:
             await update.message.reply_text(
-                f"⚠️ You need at least {MIN_WITHDRAW} {COIN_NAME} to Withdraw.\n"
-                f"📊 Current Status: {bal}/{MIN_WITHDRAW} {COIN_NAME}"
+                f"⚠️ Minimum withdraw: {MIN_WITHDRAW} {COIN_NAME}\n"
+                f"📊 Your balance: {bal}/{MIN_WITHDRAW}"
             )
             return
         if not wallet:
             await update.message.reply_text("❌ Set your wallet first from 👛 Wallet")
             return
-
-        # demo withdraw request (real payout not implemented)
         await update.message.reply_text(
             "✅ Withdraw request submitted (demo).\n"
             "Admin will review & process."
@@ -231,7 +226,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "ℹ️ Information":
         await update.message.reply_text(
-            f"ℹ️ {COIN_NAME} Airdrop Bot\n\n"
+            f"ℹ️ {COIN_NAME} Airdrop\n\n"
             f"✅ Join bonus: {JOIN_BONUS}\n"
             f"🎁 Refer bonus: {REFER_BONUS}\n"
             f"💸 Min withdraw: {MIN_WITHDRAW}\n"
@@ -243,21 +238,135 @@ async def change_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     user_id = q.from_user.id
-
     WAITING_WALLET.add(user_id)
     await q.message.reply_text(
-        "👇 Enter your wallet address now (BSC / MetaMask / TrustWallet):\n\n"
-        "Send the address as a message.\n"
+        "👇 Send your wallet address now:\n\n"
         "To cancel, send: /start"
     )
 
+# ---------- ✅ ADMIN PANEL ----------
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+        await update.message.reply_text(
+        "🛠 Admin Panel\n\n"
+        "Commands:\n"
+        "/userinfo <user_id>\n"
+        "/addbal <user_id> <amount>\n"
+        "/setbal <user_id> <amount>\n"
+        "/setwallet <user_id> <wallet>\n"
+    )
+
+async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    if len(context.args) != 1:
+        await update.message.reply_text("Usage: /userinfo <user_id>")
+        return
+    try:
+        uid = int(context.args[0])
+    except:
+        await update.message.reply_text("❌ Invalid user_id")
+        return
+
+    ensure_user(uid)
+    refs, bal, wallet = get_user(uid)
+    wallet_show = wallet if wallet else "None"
+    await update.message.reply_text(
+        f"👤 User ID: {uid}\n"
+        f"💎 Balance: {bal} {COIN_NAME}\n"
+        f"👥 Referrals: {refs}\n"
+        f"👛 Wallet: {wallet_show}"
+    )
+
+async def addbal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    if len(context.args) != 2:
+        await update.message.reply_text("Usage: /addbal <user_id> <amount>")
+        return
+    try:
+        uid = int(context.args[0])
+        amount = int(context.args[1])
+    except:
+        await update.message.reply_text("❌ Invalid input")
+        return
+    if amount <= 0:
+        await update.message.reply_text("❌ Amount must be > 0")
+        return
+
+    ensure_user(uid)
+    add_bonus(uid, amount)
+    refs, bal, wallet = get_user(uid)
+    await update.message.reply_text(f"✅ Added {amount} {COIN_NAME} to {uid}. New balance: {bal}")
+
+async def setbal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    if len(context.args) != 2:
+        await update.message.reply_text("Usage: /setbal <user_id> <amount>")
+        return
+    try:
+        uid = int(context.args[0])
+        amount = int(context.args[1])
+    except:
+        await update.message.reply_text("❌ Invalid input")
+        return
+    if amount < 0:
+        await update.message.reply_text("❌ Amount must be >= 0")
+        return
+
+    ensure_user(uid)
+    cur.execute("UPDATE users SET balance=? WHERE user_id=?", (amount, uid))
+    conn.commit()
+    await update.message.reply_text(f"✅ Set balance of {uid} to {amount} {COIN_NAME}")
+
+async def setwallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /setwallet <user_id> <wallet>")
+        return
+    try:
+        uid = int(context.args[0])
+    except:
+        await update.message.reply_text("❌ Invalid user_id")
+        return
+
+    wallet = " ".join(context.args[1:]).strip()
+    if len(wallet) < 10:
+        await update.message.reply_text("❌ Wallet too short")
+        return
+
+    ensure_user(uid)
+    cur.execute("UPDATE users SET wallet=? WHERE user_id=?", (wallet, uid))
+    conn.commit()
+    await update.message.reply_text(f"✅ Wallet updated for {uid}")
+
+# ---------- MAIN ----------
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+
+    # User
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(verify_join, pattern="^verify_join$"))
     app.add_handler(CallbackQueryHandler(change_wallet, pattern="^change_wallet$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu))
+
+    # ✅ Admin
+    app.add_handler(CommandHandler("admin", admin))
+    app.add_handler(CommandHandler("userinfo", userinfo))
+    app.add_handler(CommandHandler("addbal", addbal))
+    app.add_handler(CommandHandler("setbal", setbal))
+    app.add_handler(CommandHandler("setwallet", setwallet))
+
     app.run_polling()
 
-if __name__ == "__main__":
+if name == "main":
     main()
