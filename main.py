@@ -9,7 +9,7 @@ from telegram.ext import (
 import sqlite3
 
 # ===== EDIT THESE =====
-TOKEN = "8529982079:AAGx_cdHsdNw8vyEWS6AQJ-tVAKtBOGTYaM"
+TOKEN = ""
 BOT_USERNAME = "FynixTokenBot_bot"  # without @
 
 COIN_NAME = "Fynix Token"
