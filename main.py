@@ -9,17 +9,17 @@ from telegram.ext import (
 import sqlite3
 
 # ===== EDIT THESE =====
-TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"
+TOKEN = "8529982079:AAGx_cdHsdNw8vyEWS6AQJ-tVAKtBOGTYaM"
 BOT_USERNAME = "FynixTokenBot_bot"  # without @
 
 COIN_NAME = "Fynix Token"
 JOIN_BONUS = 100
 REFER_BONUS = 500
-MIN_WITHDRAW = 3000
+MIN_WITHDRAW = 20000
 
 REQUIRED_CHANNELS = [
-    "@YourChannel1",
-    "@YourChannel2",
+    "@FynixTokenBot",
+    "@FynixTokenBot_News",
 ]
 # ======================
 
