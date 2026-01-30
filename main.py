@@ -351,7 +351,7 @@ async def setwallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- MAIN ----------
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(8529982079:AAGx_cdHsdNw8vyEWS6AQJ-tVAKtBOGTYaM).build()
 
     # User
     app.add_handler(CommandHandler("start", start))
