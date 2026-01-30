@@ -10,6 +10,7 @@ import sqlite3
 
 # ===== EDIT THESE =====
 TOKEN = "8529982079:AAGx_cdHsdNw8vyEWS6AQJ-tVAKtBOGTYaM"
+ADMIN_IDS = [8573670035]
 BOT_USERNAME = "FynixTokenBot_bot"  # without @
 
 COIN_NAME = "Fynix Token"
