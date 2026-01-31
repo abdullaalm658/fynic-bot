@@ -147,11 +147,12 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    text = update.message.text
+    text = update.message.text.strip()
 
     ensure_user(uid)
     refs, bal, wallet = get_user(uid)
 
+    # 💰 BALANCE
     if text == "💰 Balance":
         await update.message.reply_text(
             f"👤 ID: {uid}\n"
@@ -159,24 +160,69 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👥 Referrals: {refs}"
         )
 
+    # 🤝 INVITE
     elif text == "🤝 Invite":
         await update.message.reply_text(
             f"🤝 Invite Friends\n\n"
-            f"🎁 {REFER_BONUS} {COIN_NAME} per referral\n\n"
+            f"🎁 500 {COIN_NAME} per referral\n\n"
             f"🔗 Your Link:\n{referral_link(uid)}"
         )
 
-    elif text == "ℹ️ Information":
+    # 👛 WALLET
+    elif text == "👛 Wallet":
+        if wallet:
+            await update.message.reply_text(
+                f"👛 Your Wallet Address:\n{wallet}\n\n"
+                "Send new address to change."
+            )
+        else:
+            await update.message.reply_text(
+                "👛 Wallet not set.\n\n"
+                "Send your wallet address now."
+            )
+        context.user_data["waiting_wallet"] = True
+
+    # 💸 WITHDRAW
+    elif text == "💸 Withdraw":
+        if bal < MIN_WITHDRAW:
+            await update.message.reply_text(
+                f"⚠️ Minimum withdraw {MIN_WITHDRAW} {COIN_NAME}\n"
+                f"Your balance: {bal}"
+            )
+            return
+
+        if not wallet:
+            await update.message.reply_text(
+                "❌ Set your wallet first from 👛 Wallet"
+            )
+            return
+
         await update.message.reply_text(
-            f"{COIN_NAME} Airdrop Bot\n"
-            f"Join: {JOIN_BONUS}\nRefer: {REFER_BONUS}"
+            "✅ Withdraw request submitted.\n"
+            "Admin will process manually."
+        )
+
+    # 📝 WALLET INPUT
+    elif context.user_data.get("waiting_wallet"):
+        if len(text) < 20:
+            await update.message.reply_text("❌ Invalid wallet address")
+            return
+
+        cur.execute(
+            "UPDATE users SET wallet=? WHERE user_id=?",
+            (text, uid)
+        )
+        conn.commit()
+
+        context.user_data["waiting_wallet"] = False
+        await update.message.reply_text(
+            "✅ Wallet saved successfully!"
         )
 
     else:
         await update.message.reply_text(
-            "Use menu buttons 👇",
-            reply_markup=MAIN_MENU
-        )
+            "Use menu buttons 👇"
+    )
 
 # ---------- ADMIN ----------
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
